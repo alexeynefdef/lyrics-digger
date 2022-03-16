@@ -2,9 +2,11 @@ package service;
 
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.UpdatesListener;
+import com.pengrad.telegrambot.model.Message;
 import com.pengrad.telegrambot.model.Update;
 import com.pengrad.telegrambot.model.request.*;
 import com.pengrad.telegrambot.request.SendMessage;
+import lombok.NoArgsConstructor;
 import model.Song;
 import model.SongResponse;
 import model.UpdateFromUser;
@@ -12,38 +14,45 @@ import properties.GeniusBotProperties;
 import properties.MessagesAndLinks;
 
 import java.util.HashMap;
-
+@NoArgsConstructor
 public class BotService {
 
     private final String TOKEN = GeniusBotProperties.getProp("bot.token");
     private final TelegramBot bot = new TelegramBot(TOKEN);
     private final HashMap<Long,UpdateFromUser> usersByChatID = new HashMap<>();
 
-    public BotService() {
-    }
-
     public void initUpdateListener() {
-
-        this.bot.setUpdatesListener(updates -> {
+        this.bot.setUpdatesListener( updates -> {
             for (Update update : updates) {
-                if (update.message() != null && update.message().text() != null) {
-
+                if (update.message() != null && (update.message().text() != null || update.message().audio() != null)) {
                     long chatId = update.message().chat().id();
                     String userName = update.message().from().username();
-                    String text = update.message().text();
-
-                    if (!usersByChatID.containsKey(chatId)) {
-                        usersByChatID.put(chatId, new UpdateFromUser(chatId, userName, text));
-                        System.out.println("Users count: " + usersByChatID.size());
-                        usersByChatID.values().forEach(System.out::println);
+                    if (update.message().audio() != null) {
+                        var audio = update.message().audio();
+                        if (!usersByChatID.containsKey(chatId)) {
+                            usersByChatID.put(chatId, new UpdateFromUser(chatId, userName, audio));
+                            System.out.println("Users count: " + usersByChatID.size());
+                            usersByChatID.values().forEach(System.out::println);
+                        } else {
+                            usersByChatID.get(chatId).setAudio(audio);
+                        }
                     } else {
-                        usersByChatID.get(chatId).setMessageText(text);
+                        String text = update.message().text();
+                        if (!usersByChatID.containsKey(chatId)) {
+                            usersByChatID.put(chatId, new UpdateFromUser(chatId, userName, text));
+                            System.out.println("Users count: " + usersByChatID.size());
+                            usersByChatID.values().forEach(System.out::println);
+                        } else {
+                            usersByChatID.get(chatId).setMessageText(text);
+                            usersByChatID.get(chatId).setAudio(null);
+                        }
                     }
-                    this.usersByChatID.get(chatId).setStart();
-                    this.usersByChatID.get(chatId).setHelp();
                     analyzeMessage(chatId);
                     //Mock Logger TODO: integrate Logger
+                    this.usersByChatID.get(chatId).setStart();
+                    this.usersByChatID.get(chatId).setHelp();
                     System.out.println("New update:" + this.usersByChatID.get(chatId).displayUpdate());
+
                 }
             }
             return UpdatesListener.CONFIRMED_UPDATES_ALL;
@@ -62,20 +71,32 @@ public class BotService {
     }
 
     private void initBotMessaging(long chatId) {
-        if (this.usersByChatID.get(chatId).getSong() == null) {
-            this.usersByChatID.get(chatId).setSong(new Song());
+
+        var userUpdate = this.usersByChatID.get(chatId);
+
+        if (userUpdate.getSong() == null) {
+            userUpdate.setSong(new Song());
+
+            if (userUpdate.getAudio() != null) {
+                userUpdate.getSong().setArtist(userUpdate.getAudio().performer());
+                userUpdate.getSong().setTitle(userUpdate.getAudio().title());
+            }
         }
-        if (this.usersByChatID.get(chatId).getSong().getArtist() == null) {
 
-            this.usersByChatID.get(chatId).getSong().setArtist(this.usersByChatID.get(chatId).getMessageText().trim());
-            bot.execute(new SendMessage(this.usersByChatID.get(chatId).getChatID(), MessagesAndLinks.GET_TITLE_FROM_USER.getReference()));
+        if (userUpdate.getSong().getArtist() == null) {
 
-        } else if (this.usersByChatID.get(chatId).getSong().getArtist() != null && this.usersByChatID.get(chatId).getSong().getTitle() == null) {
+            userUpdate.getSong().setArtist(userUpdate.getMessageText().trim());
+            bot.execute(new SendMessage(userUpdate.getChatID(), MessagesAndLinks.GET_TITLE_FROM_USER.getReference()));
 
-            this.usersByChatID.get(chatId).getSong().setTitle(this.usersByChatID.get(chatId).getMessageText().trim());
-            bot.execute(new SendMessage(this.usersByChatID.get(chatId).getChatID(), MessagesAndLinks.SEARCHING.getReference()));
+        } else if ((userUpdate.getSong().getArtist() != null && userUpdate.getSong().getTitle() == null) || userUpdate.getAudio() != null) {
 
-            GeniusApi api = new GeniusApi(this.usersByChatID.get(chatId).getSong());
+            if (userUpdate.getAudio() == null) {
+                userUpdate.getSong().setTitle(userUpdate.getMessageText().trim());
+            }
+
+            bot.execute(new SendMessage(userUpdate.getChatID(), MessagesAndLinks.SEARCHING.getReference()));
+
+            GeniusApi api = new GeniusApi(userUpdate.getSong());
             SongResponse songResponse = api.connectToGenius();
             String responseMessage = "";
 
@@ -96,7 +117,7 @@ public class BotService {
                     String firstPart = songResponse.getFullTitle() + "\n\n\n";
                     firstPart += songResponse.getLyrics().substring(0,songResponse.getLyrics().length()/2);
                     String secondPart = songResponse.getLyrics().substring(songResponse.getLyrics().length()/2);
-                    bot.execute(new SendMessage(this.usersByChatID.get(chatId).getChatID(), firstPart));
+                    bot.execute(new SendMessage(userUpdate.getChatID(), firstPart));
                     responseMessage += secondPart + "\n";
                     responseMessage += "<a href='";
                     responseMessage += songResponse.getImageUlr();

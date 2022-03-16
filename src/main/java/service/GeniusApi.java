@@ -128,7 +128,7 @@ public class GeniusApi {
     }
 
     private String parseLyrics() throws IOException {
-        Document document = Jsoup.connect(MessagesAndLinks.GENIUS_URL_SONG.getReference() + songResponse.getId() + "/embed.js").get();
+        Document document = Jsoup.connect(MessagesAndLinks.GENIUS_URL_SONG.getReference() + songResponse.getId() + "/embed.js").userAgent("Mozilla").get();
         var lyricsRaw = document.body().getElementsByTag("p").text();
         return getReadable(lyricsRaw);
     }

@@ -1,9 +1,15 @@
 package model;
 
+import com.pengrad.telegrambot.model.Audio;
+import com.pengrad.telegrambot.model.Message;
+import lombok.Getter;
+
+@Getter
 public class UpdateFromUser {
     private long chatID;
     private String userName;
     private String messageText;
+    private Audio audio;
     private boolean start;
     private boolean help;
     private Song song;
@@ -14,24 +20,22 @@ public class UpdateFromUser {
         this.messageText = messageText;
     }
 
-    public long getChatID() {
-        return chatID;
+    public UpdateFromUser(long chatID, String userName, Audio audio) {
+        this.chatID = chatID;
+        this.userName = userName;
+        this.audio = audio;
+    }
+
+    public void setAudio(Audio audio) {
+        this.audio = audio;
     }
 
     public void setChatID(long chatID) {
         this.chatID = chatID;
     }
 
-    public String getUserName() {
-        return userName;
-    }
-
     public void setUserName(String userName) {
         this.userName = userName;
-    }
-
-    public String getMessageText() {
-        return messageText;
     }
 
     public void setMessageText(String messageText) {
@@ -56,10 +60,6 @@ public class UpdateFromUser {
         if (this.messageText != null) {
             this.help = this.messageText.equalsIgnoreCase("/help") || this.messageText.equalsIgnoreCase("help");
         }
-    }
-
-    public Song getSong() {
-        return song;
     }
 
     public void setSong(Song song) {
